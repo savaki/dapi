@@ -18,9 +18,12 @@ func TestDriver_Open(t *testing.T) {
 		accessKeyID     = os.Getenv("AWS_ACCESS_KEY_ID")
 		secretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 		sessionToken    = os.Getenv("AWS_SESSION_TOKEN")
+		database        = os.Getenv("DATABASE")
+		secretARN       = os.Getenv("SECRET_ARN")
+		resourceARN     = os.Getenv("RESOURCE_ARN")
 	)
 
-	if accessKeyID == "" || secretAccessKey == "" {
+	if accessKeyID == "" || secretAccessKey == "" || database == "" || secretARN == "" || resourceARN == "" {
 		t.SkipNow()
 	}
 
@@ -29,12 +32,9 @@ func TestDriver_Open(t *testing.T) {
 		s   = session.Must(session.NewSession(aws.NewConfig().
 			WithCredentials(credentials.NewStaticCredentials(accessKeyID, secretAccessKey, sessionToken)).
 			WithRegion("us-west-2")))
-		api         = rdsdataservice.New(s)
-		driver      = New(api)
-		database    = "vavende_crm"
-		secretARN   = "arn:aws:secretsmanager:us-west-2:950816970505:secret:dev/mysql/aurora-vIY0K6"
-		resourceARN = "arn:aws:rds:us-west-2:950816970505:cluster:dev-mysql"
-		dsn         = fmt.Sprintf("secret=%v resource=%v database=%v", secretARN, resourceARN, database)
+		api    = rdsdataservice.New(s)
+		driver = New(api)
+		dsn    = fmt.Sprintf("secret=%v resource=%v database=%v", secretARN, resourceARN, database)
 	)
 
 	sql.Register("mysql", driver)

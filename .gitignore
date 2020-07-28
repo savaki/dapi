@@ -6,3 +6,4 @@
 
 # ignore generated
 go.sum
+*.sh

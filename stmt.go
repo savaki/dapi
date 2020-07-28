@@ -3,7 +3,6 @@ package dapi
 import (
 	"context"
 	"database/sql/driver"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rdsdataservice"
 	"time"
@@ -37,30 +36,7 @@ func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 func (s *Stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	input := &rdsdataservice.ExecuteStatementInput{
-		Database:    aws.String(s.config.database),
-		ResourceArn: aws.String(s.config.resourceARN),
-		SecretArn:   aws.String(s.config.secretARN),
-		Sql:         aws.String(s.query),
-	}
-
-	for _, arg := range args {
-		param := rdsdataservice.SqlParameter{
-			Name:     aws.String(arg.Name),
-			TypeHint: nil,
-			Value:    valueOf(arg.Value),
-		}
-		input.Parameters = append(input.Parameters, &param)
-	}
-
-	output, err := s.config.api.ExecuteStatementWithContext(ctx, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute statement: %w", err)
-	}
-
-	return &Result{
-		output: output,
-	}, nil
+	return executeStatement(ctx, s.config, s.query, "", args...)
 }
 
 func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -79,7 +55,7 @@ func newStmt(ctx context.Context, config *config, query string) *Stmt {
 	}
 }
 
-func valueOf(value driver.Value) *rdsdataservice.Field {
+func asField(value driver.Value) *rdsdataservice.Field {
 	switch v := value.(type) {
 	case int64:
 		return &rdsdataservice.Field{LongValue: aws.Int64(v)}
@@ -92,9 +68,39 @@ func valueOf(value driver.Value) *rdsdataservice.Field {
 	case string:
 		return &rdsdataservice.Field{StringValue: aws.String(v)}
 	case time.Time:
-		s := v.Format(time.RFC3339)
+		s := v.Format("2006-01-02 15:04:05")
 		return &rdsdataservice.Field{StringValue: aws.String(s)}
 	default:
 		return &rdsdataservice.Field{IsNull: aws.Bool(true)}
+	}
+}
+
+func valueOf(field *rdsdataservice.Field) driver.Value {
+	switch {
+	case field.ArrayValue != nil:
+		switch {
+		case field.ArrayValue.BooleanValues != nil:
+			return aws.BoolValueSlice(field.ArrayValue.BooleanValues)
+		case field.ArrayValue.DoubleValues != nil:
+			return aws.Float64ValueSlice(field.ArrayValue.DoubleValues)
+		case field.ArrayValue.LongValues != nil:
+			return aws.Int64ValueSlice(field.ArrayValue.LongValues)
+		case field.ArrayValue.StringValues != nil:
+			return aws.StringValueSlice(field.ArrayValue.StringValues)
+		default:
+			return nil
+		}
+	case field.BlobValue != nil:
+		return field.BlobValue
+	case field.BooleanValue != nil:
+		return *field.BooleanValue
+	case field.DoubleValue != nil:
+		return *field.DoubleValue
+	case field.LongValue != nil:
+		return *field.LongValue
+	case field.StringValue != nil:
+		return *field.StringValue
+	default:
+		return nil
 	}
 }
