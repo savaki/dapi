@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -61,7 +62,7 @@ func (r *Result) Next(dest []driver.Value) error {
 				case "DATE":
 					layout = "2006-01-02"
 
-				case "DATETIME", "TIMESTAMP":
+				case "DATETIME", "TIMESTAMP", "timestamptz":
 					layout = "2006-01-02 15:04:05"
 
 				case "YEAR":
@@ -104,7 +105,11 @@ func (r *Result) RowsAffected() (int64, error) {
 const prefix = "f"
 
 func executeStatement(ctx context.Context, config *config, query, transactionID string, args ...driver.NamedValue) (*Result, error) {
-	query = nameParameters(prefix, query)
+	if strings.Contains(config.database, "postgres") {
+		query = nameParametersPsql(prefix, query, len(args))
+	} else {
+		query = nameParameters(prefix, query)
+	}
 	input := &rdsdataservice.ExecuteStatementInput{
 		Database:              aws.String(config.database),
 		IncludeResultMetadata: aws.Bool(true),
@@ -159,4 +164,12 @@ func nameParameters(prefix, query string) string {
 		got = append(got, r)
 	}
 	return string(got)
+}
+
+func nameParametersPsql(prefix, query string, numArgs int) string {
+	result := query
+	for i := 1; i <= numArgs; i++ {
+		result = strings.Replace(result, fmt.Sprint("$", i), fmt.Sprint(":", prefix, i), -1)
+	}
+	return result
 }
