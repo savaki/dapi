@@ -17,10 +17,15 @@ package dapi
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rdsdataservice"
-	"time"
+	"github.com/gofrs/uuid"
 )
+
+var ErrInvalidField = errors.New("invalid field")
 
 type Stmt struct {
 	ctx    context.Context
@@ -58,7 +63,7 @@ func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	panic("implement me: QueryContext (Stmt)")
+	return executeStatement(ctx, s.config, s.query, "", args...)
 }
 
 func newStmt(ctx context.Context, config *config, query string) *Stmt {
@@ -69,23 +74,51 @@ func newStmt(ctx context.Context, config *config, query string) *Stmt {
 	}
 }
 
-func asField(value driver.Value) *rdsdataservice.Field {
+// If a type implements Hinter it can provide a type hint to the data-api directly
+type Hinter interface {
+	TypeHint() string
+	driver.Valuer
+}
+
+func asField(value driver.Value) (*rdsdataservice.Field, *string, error) {
+	var hint *string
+	if v, ok := value.(Hinter); ok {
+		hint = aws.String(v.TypeHint())
+	} else {
+		switch value.(type) {
+		case time.Time:
+			hint = aws.String("TIMESTAMP")
+		case uuid.UUID:
+			hint = aws.String("UUID")
+		}
+	}
+	if v, ok := value.(driver.Valuer); ok {
+		var err error
+		value, err = v.Value()
+		if err != nil {
+			return nil, hint, err
+		}
+	}
+
 	switch v := value.(type) {
 	case int64:
-		return &rdsdataservice.Field{LongValue: aws.Int64(v)}
+		return &rdsdataservice.Field{LongValue: aws.Int64(v)}, hint, nil
 	case float64:
-		return &rdsdataservice.Field{DoubleValue: aws.Float64(v)}
+		return &rdsdataservice.Field{DoubleValue: aws.Float64(v)}, hint, nil
 	case bool:
-		return &rdsdataservice.Field{BooleanValue: aws.Bool(v)}
+		return &rdsdataservice.Field{BooleanValue: aws.Bool(v)}, hint, nil
 	case []byte:
-		return &rdsdataservice.Field{BlobValue: v}
+		return &rdsdataservice.Field{BlobValue: v}, hint, nil
 	case string:
-		return &rdsdataservice.Field{StringValue: aws.String(v)}
+		return &rdsdataservice.Field{StringValue: aws.String(v)}, hint, nil
 	case time.Time:
 		s := v.Format("2006-01-02 15:04:05")
-		return &rdsdataservice.Field{StringValue: aws.String(s)}
+		return &rdsdataservice.Field{StringValue: aws.String(s)}, hint, nil
 	default:
-		return &rdsdataservice.Field{IsNull: aws.Bool(true)}
+		if v == nil {
+			return &rdsdataservice.Field{IsNull: aws.Bool(true)}, hint, nil
+		}
+		return nil, hint, ErrInvalidField
 	}
 }
 
