@@ -122,9 +122,14 @@ func executeStatement(ctx context.Context, config *config, query, transactionID 
 			name = prefix + strconv.Itoa(arg.Ordinal)
 		}
 
+		val, hint, err := asField(arg.Value)
+		if err != nil {
+			return nil, err
+		}
 		param := rdsdataservice.SqlParameter{
-			Name:  aws.String(name),
-			Value: asField(arg.Value),
+			Name:     aws.String(name),
+			Value:    val,
+			TypeHint: hint,
 		}
 
 		input.Parameters = append(input.Parameters, &param)

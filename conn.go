@@ -21,6 +21,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rdsdataservice"
+	"github.com/gofrs/uuid"
 )
 
 type Conn struct {
@@ -78,4 +79,18 @@ func (c *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 
 func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	return executeStatement(ctx, c.config, query, c.transactionID, args...)
+}
+
+// CheckNamedValue allows some types to get passed down to the
+// executor so the TypeHint can be set
+func (c *Conn) CheckNamedValue(v *driver.NamedValue) error {
+	switch v.Value.(type) {
+	case uuid.UUID:
+		return nil
+	}
+
+	if _, ok := v.Value.(Hinter); ok {
+		return nil
+	}
+	return driver.ErrSkip
 }
