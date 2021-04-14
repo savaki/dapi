@@ -17,9 +17,10 @@ package dapi
 import (
 	"context"
 	"database/sql/driver"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rdsdataservice"
-	"time"
 )
 
 type Stmt struct {
@@ -82,7 +83,7 @@ func asField(value driver.Value) *rdsdataservice.Field {
 	case string:
 		return &rdsdataservice.Field{StringValue: aws.String(v)}
 	case time.Time:
-		s := v.Format("2006-01-02 15:04:05")
+		s := v.Format("2006-01-02 15:04:05.999999999")
 		return &rdsdataservice.Field{StringValue: aws.String(s)}
 	default:
 		return &rdsdataservice.Field{IsNull: aws.Bool(true)}
