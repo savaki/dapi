@@ -62,7 +62,7 @@ func (r *Result) Next(dest []driver.Value) error {
 					layout = "2006-01-02"
 
 				case "DATETIME", "TIMESTAMP":
-					layout = "2006-01-02 15:04:05"
+					layout = timeFormat
 
 				case "YEAR":
 					layout = "2006"
