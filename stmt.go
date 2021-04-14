@@ -83,7 +83,7 @@ func asField(value driver.Value) *rdsdataservice.Field {
 	case string:
 		return &rdsdataservice.Field{StringValue: aws.String(v)}
 	case time.Time:
-		s := v.Format("2006-01-02 15:04:05.999999999")
+		s := v.Format(timeFormat)
 		return &rdsdataservice.Field{StringValue: aws.String(s)}
 	default:
 		return &rdsdataservice.Field{IsNull: aws.Bool(true)}
